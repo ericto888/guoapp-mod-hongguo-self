@@ -3092,6 +3092,25 @@ function recommendationError() {
   return new Error("推荐分类或分页参数无效，请重新获取");
 }
 
+// The source was forked under hongguo-self, while older cursors may still
+// contain hongguo: IDs. Ignore IDs belonging to other providers.
+function recommendationSeenId(raw) {
+  if (typeof raw !== "string") {
+    return "";
+  }
+  const value = raw.trim();
+  const separator = value.indexOf(":");
+  if (separator < 0) {
+    return numericId(value) ? value : "";
+  }
+  const source = value.slice(0, separator).trim().toLowerCase();
+  if (source !== String(host.source).toLowerCase() && source !== "hongguo") {
+    return "";
+  }
+  const id = value.slice(separator + 1).trim();
+  return numericId(id) ? id : "";
+}
+
 function validateRecommendation(query) {
   const known = genres.some((genre) => genre.key === query.genre) || recommendationFeeds.some((feed) => feed.key === query.genre);
   if (!known || query.offset < 0 || query.offset > 1000000 || query.sessionId.length > 4096 || /[\r\n\x00]/.test(query.sessionId) || query.seen.length > 540 ||
@@ -3099,7 +3118,7 @@ function validateRecommendation(query) {
     throw recommendationError();
   }
   for (const id of query.seen) {
-    if (!numericId(id.replace(/^hongguo:/, ""))) {
+    if (typeof id !== "string" || id.length > 256) {
       throw new Error("推荐分页含无效剧集 ID");
     }
   }
@@ -3167,8 +3186,8 @@ function fetchRecommendations(query) {
   const seen = new Set();
   const filterIds = [];
   for (const raw of query.seen) {
-    const id = raw.replace(/^hongguo:/, "");
-    if (!seen.has(id)) {
+    const id = recommendationSeenId(raw);
+    if (id !== "" && !seen.has(id)) {
       filterIds.push(id);
       seen.add(id);
     }
@@ -3228,7 +3247,7 @@ function fetchCellPage(page, tabType, offset, helper) {
 }
 
 function feedRecommendations(query, tabType, bottomTab) {
-  const seen = new Set(query.seen.map((id) => id.replace(/^hongguo:/, "")));
+  const seen = new Set(query.seen.map(recommendationSeenId).filter((id) => id !== ""));
   const page = { items: [], nextOffset: query.offset, sessionId: query.sessionId, cellId: query.cellId, showType: query.showType, hasMore: true };
   let validRows = 0;
   for (let attempt = 0; attempt < 3 && page.items.length === 0 && page.hasMore; attempt++) {
