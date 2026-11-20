@@ -1,5 +1,6 @@
 // GPL-3.0-only. Forked from guoapp-modules/hongguo/main.js at 4bcaea63141fcb18c1b1c621c33f25838f625235.
 // Maintained in ericto888/guoapp-sources; local fork established 2026-11-20.
+// Modified 2026-11-20: refresh aged playback identities and add AB-off / legacy endpoint fallbacks.
 const siteBaseUrl = "https://hongguoduanju.com";
 const appBaseUrl = "https://api5-normal-sinfonlineb.fqnovel.com";
 const playbackBaseUrl = "https://api5-normal-sinfonlinea.fqnovel.com";
@@ -24,6 +25,7 @@ const danmakuMaxDurationMs = 24 * 60 * minuteMs;
 const defaultMaxPages = 50;
 const deviceRotations = 3;
 const registerPauseMs = 10 * minuteMs;
+const playerDeviceMaxAgeMs = 8 * minuteMs;
 const appRequestTimeoutMs = 20 * secondMs;
 const searchTimeoutMs = 40 * secondMs;
 const searchPageTimeoutMs = 12 * secondMs;
@@ -48,7 +50,9 @@ const tagPanelCategory = "5000";
 
 const paths = {
   videoDetail: "/novel/player/video_detail/v1/",
+  videoModelABOff: "/novel/player/multi_video_model/v1",
   videoModel: "/novel/player/multi_video_model/player/v1",
+  videoModelLegacy: "/novel/player/video_model/v1/",
   videoTab: "/reading/bookapi/video_tab/multi_video_model/v1/",
   landpage: "/reading/distribution/category/landpage/v/",
   seriesPack: "/reading/distribution/book_pack_fields/inner_feed_detail/v1/",
@@ -1347,9 +1351,9 @@ function updateState(change) {
 
 function deviceOf(state, helper) {
   if (helper) {
-    return [state.helperDeviceId || "", state.helperInstallId || "", state.helperRegistered === true];
+    return [state.helperDeviceId || "", state.helperInstallId || "", state.helperRegistered === true, Number(state.helperRegisteredAt) || 0];
   }
-  return [state.deviceId || "", state.installId || "", state.registered === true];
+  return [state.deviceId || "", state.installId || "", state.registered === true, Number(state.registeredAt) || 0];
 }
 
 function appQuery(deviceId, installId) {
@@ -1408,10 +1412,12 @@ function registerDevice() {
   return { deviceId, installId };
 }
 
-function ensureDevice(helper, rejected) {
+function ensureDevice(helper, rejected, forPlayback) {
   const settled = (state) => {
-    const [current, , registered] = deviceOf(state, helper);
-    return rejected === "" ? registered : rejected !== current;
+    const [current, , registered, registeredAt] = deviceOf(state, helper);
+    const stale = forPlayback === true && registered &&
+      (!(registeredAt > 0) || Date.now() - registeredAt >= playerDeviceMaxAgeMs);
+    return rejected === "" ? registered && !stale : rejected !== current && !stale;
   };
   if (settled(currentState())) {
     return;
@@ -1434,14 +1440,17 @@ function ensureDevice(helper, rejected) {
       }
       throw error;
     }
+    const registeredAt = Date.now();
     if (helper) {
       state.helperDeviceId = registered.deviceId;
       state.helperInstallId = registered.installId;
       state.helperRegistered = true;
+      state.helperRegisteredAt = registeredAt;
     } else {
       state.deviceId = registered.deviceId;
       state.installId = registered.installId;
       state.registered = true;
+      state.registeredAt = registeredAt;
     }
     writeState(state);
   });
@@ -1468,14 +1477,14 @@ function appRequest(method, path, extra, payload, options) {
   const comment = options.comment === true;
   const helper = options.helper === true;
   const deadline = options.deadline;
-  const playback = path === paths.videoModel;
+  const playback = path === paths.videoModel || path === paths.videoModelABOff || path === paths.videoModelLegacy;
   const signedV5 = playback || path === paths.videoTab;
   const signed = !comment && path !== paths.bookmallTab;
   let lane = "";
   let registerError = null;
   if (signed) {
     try {
-      ensureDevice(helper, "");
+      ensureDevice(helper, "", playback || path === paths.videoTab);
     } catch (error) {
       registerError = error;
     }
@@ -1563,7 +1572,7 @@ function appRequest(method, path, extra, payload, options) {
       lastError = new Error("红果 App 接口未返回有效数据");
       if (signed && rotations < deviceRotations) {
         try {
-          ensureDevice(helper, deviceId);
+          ensureDevice(helper, deviceId, playback || path === paths.videoTab);
           registerError = null;
           rotations++;
           [deviceId, installId] = deviceOf(currentState(), helper);
@@ -2288,7 +2297,7 @@ function appMedia(videoId) {
   }
   const [rejected] = deviceOf(currentState(), true);
   try {
-    ensureDevice(true, rejected);
+    ensureDevice(true, rejected, true);
   } catch (rotateError) {
     throw new Error(message(lastError) + "；更换辅助设备也没有成功：" + message(rotateError));
   }
@@ -2300,9 +2309,6 @@ function fetchAppMedia(videoId, helper) {
   try {
     return fetchTabMedia(videoId, helper);
   } catch (error) {
-    if (error.noCompatibleMedia) {
-      throw error;
-    }
     tabError = error;
   }
   try {
@@ -2330,20 +2336,67 @@ function fetchTabMedia(videoId, helper) {
 }
 
 function fetchPlayerMedia(videoId, helper) {
-  const payload = {
-    biz_param: {
-      detail_page_version: 0, device_level: 1, disable_digg_stat: false, disable_video_relate_book: false,
-      need_all_video_definition: true, need_mp4_align: false, use_os_player: false, use_server_dns: false, video_platform: 1024,
-    },
-    mixed_video_id_map: { "1004": [videoId] }, dr_scene: "player",
+  let lastError = null;
+  for (const path of [paths.videoModelABOff, paths.videoModel, paths.videoModelLegacy]) {
+    try {
+      return path === paths.videoModelLegacy
+        ? fetchLegacyPlayerMedia(videoId, helper)
+        : fetchMultiPlayerMedia(videoId, helper, path);
+    } catch (error) {
+      lastError = error;
+      if (!error.noCompatibleMedia && !error.endpointFallback) {
+        throw error;
+      }
+    }
+  }
+  throw lastError || new Error("红果 App 未返回可用播放信息");
+}
+
+function fetchMultiPlayerMedia(videoId, helper, path) {
+  const abOff = path === paths.videoModelABOff;
+  const bizParam = {
+    detail_page_version: 0, device_level: 1, disable_digg_stat: false, disable_video_relate_book: false,
+    need_all_video_definition: true, need_mp4_align: false, use_os_player: false,
+    use_server_dns: abOff, video_platform: 1024,
   };
-  const result = appRequest("POST", paths.videoModel, null, payload, { helper });
+  if (abOff) {
+    bizParam.use_server_dns_scene = "cold_start_stage";
+  }
+  let result;
+  try {
+    result = appRequest("POST", path, null, {
+      biz_param: bizParam,
+      mixed_video_id_map: { "1004": [videoId] }, dr_scene: "player",
+    }, { helper });
+  } catch (error) {
+    error.endpointFallback = true;
+    throw error;
+  }
   const entries = nested(result, "data");
   const data = nested(isRecord(entries["1004"]) ? entries["1004"] : entries, videoId);
   if (isEmptyRecord(data)) {
-    throw new Error("红果 App 未返回所请求的分集播放信息");
+    throw failure("红果 App 未返回所请求的分集播放信息", { endpointFallback: true });
   }
   return selectAppMedia(appVideoModel(data));
+}
+
+function fetchLegacyPlayerMedia(videoId, helper) {
+  let result;
+  try {
+    result = appRequest("POST", paths.videoModelLegacy, null, {
+      video_id: videoId,
+      biz_param: { video_id_type: 0, need_all_video_definition: true, video_platform: 3, device_level: 1 },
+    }, { helper });
+  } catch (error) {
+    error.endpointFallback = true;
+    throw error;
+  }
+  const data = nested(result, "data");
+  const model = appVideoModel(data);
+  if (isEmptyRecord(model)) {
+    throw failure("红果 App 未返回所请求的分集播放信息", { endpointFallback: true });
+  }
+  return selectAppMedia(model);
 }
 
 function appVideoModel(data) {
@@ -3929,7 +3982,10 @@ function restoreCatalogState(raw) {
     version: 1, deviceId: raw.deviceId, installId: raw.installId, registered: raw.registered === true,
     helperDeviceId: typeof raw.helperDeviceId === "string" ? raw.helperDeviceId : "",
     helperInstallId: typeof raw.helperInstallId === "string" ? raw.helperInstallId : "",
-    helperRegistered: raw.helperRegistered === true, feeds: {},
+    helperRegistered: raw.helperRegistered === true,
+    registeredAt: Number(raw.registeredAt) || 0,
+    helperRegisteredAt: Number(raw.helperRegisteredAt) || 0,
+    feeds: {},
   };
   if (!numericId(state.helperDeviceId) || !numericId(state.helperInstallId)) {
     state.helperDeviceId = newDeviceId();
