@@ -1289,7 +1289,7 @@ function mediaAddresses(info) {
     }
   };
   if (isRecord(info)) {
-    for (const key of ["main_url", "backup_url", "backup_url_1", "backup_url_2", "backup_urls", "url_list"]) {
+    for (const key of ["main_url", "backup_url", "backup_url_1", "backup_url_2", "backup_urls", "backup_url_list", "url_list"]) {
       add(info[key]);
     }
   }
@@ -2435,8 +2435,9 @@ function selectAppMedia(model) {
   let choices = [];
   for (const variant of variants) {
     const meta = nested(variant, "video_meta");
-    const codec = mapString(meta, "codec_type").toLowerCase();
-    if (codec === "bytevc2" || mapString(variant, "gear_des_key").toLowerCase().includes("bytevc2")) {
+    const codec = mapString(meta, "codec_type") || mapString(variant, "codec_type");
+    const normalizedCodec = codec.toLowerCase();
+    if (normalizedCodec === "bytevc2" || mapString(variant, "gear_des_key").toLowerCase().includes("bytevc2")) {
       unsupported++;
       continue;
     }
@@ -2447,7 +2448,7 @@ function selectAppMedia(model) {
     }
     const media = { referer: mediaReferer, durationMs };
     const encryption = nested(variant, "encrypt_info");
-    const spade = mapString(encryption, "spade_a");
+    const spade = mapString(encryption, "spade_a") || mapString(variant, "spade_a");
     if (spade !== "" || encryption.encrypt === true || mapString(encryption, "encryption_method") === "cenc-aes-ctr") {
       try {
         media.cencKey = contentKey(spade);
@@ -2456,26 +2457,31 @@ function selectAppMedia(model) {
         continue;
       }
     }
-    let height = parseInteger(mapString(meta, "vheight"));
+    let height = parseInteger(mapString(meta, "vheight") || mapString(variant, "vheight"));
     if (Number.isNaN(height)) {
       height = 0;
     }
-    const definitionMatch = mapString(meta, "definition").match(/[0-9]+/);
+    const definitionMatch = (mapString(meta, "definition") || mapString(variant, "definition")).match(/[0-9]+/);
     const definition = definitionMatch ? parseInteger(definitionMatch[0]) : NaN;
-    const width = parseInteger(mapString(meta, "vwidth"));
+    const width = parseInteger(mapString(meta, "vwidth") || mapString(variant, "vwidth"));
     if (definition > 0) {
       height = definition;
     } else if (width > 0 && (height === 0 || width < height)) {
       height = width;
     }
+    if (height === 0) {
+      const qualityMap = { "1": 1080, "10": 720, "20": 540, "30": 480, "40": 360 };
+      height = qualityMap[mapString(variant, "quality_type")] || 0;
+    }
     media.quality = height;
-    const score = height * 10 + (codec === "h264" || codec === "avc1" ? 1 : 0);
+    const bitrate = parseInteger(mapString(variant, "bitrate"));
+    const h264 = normalizedCodec === "h264" || normalizedCodec === "avc1";
     for (const address of addresses) {
-      choices.push({ media: Object.assign({}, media, { url: address }), score });
+      choices.push({ media: Object.assign({}, media, { url: address }), height, h264, bitrate: Number.isNaN(bitrate) ? 0 : bitrate });
     }
   }
   if (choices.length > 0) {
-    choices = stableSort(choices, (left, right) => left.score > right.score);
+    choices = stableSort(choices, (left, right) => left.height !== right.height ? left.height > right.height : left.h264 !== right.h264 ? left.h264 : left.bitrate > right.bitrate);
     return Object.assign({}, choices[0].media, { variants: choices.map((choice) => choice.media) });
   }
   if (keyError !== null) {
