@@ -137,6 +137,21 @@ function numericId(value) {
   return typeof value === "string" && numericIdPattern.test(value);
 }
 
+function recommendationNumericId(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  let id = value.trim();
+  const prefixes = [String(host.source || "") + ":", "hongguo:"];
+  for (const prefix of prefixes) {
+    if (prefix !== ":" && id.startsWith(prefix)) {
+      id = id.slice(prefix.length);
+      break;
+    }
+  }
+  return numericId(id) ? id : "";
+}
+
 function mapString(row, ...keys) {
   if (!isRecord(row)) {
     return "";
@@ -3343,7 +3358,7 @@ function validateRecommendation(query) {
     throw recommendationError();
   }
   for (const id of query.seen) {
-    if (!numericId(id.replace(/^hongguo:/, ""))) {
+    if (recommendationNumericId(id) === "") {
       throw new Error("推荐分页含无效剧集 ID");
     }
   }
@@ -3411,7 +3426,7 @@ function fetchRecommendations(query) {
   const seen = new Set();
   const filterIds = [];
   for (const raw of query.seen) {
-    const id = raw.replace(/^hongguo:/, "");
+    const id = recommendationNumericId(raw);
     if (!seen.has(id)) {
       filterIds.push(id);
       seen.add(id);
@@ -3472,7 +3487,7 @@ function fetchCellPage(page, tabType, offset, helper) {
 }
 
 function feedRecommendations(query, tabType, bottomTab) {
-  const seen = new Set(query.seen.map((id) => id.replace(/^hongguo:/, "")));
+  const seen = new Set(query.seen.map(recommendationNumericId).filter((id) => id !== ""));
   const page = { items: [], nextOffset: query.offset, sessionId: query.sessionId, cellId: query.cellId, showType: query.showType, hasMore: true };
   let validRows = 0;
   for (let attempt = 0; attempt < 3 && page.items.length === 0 && page.hasMore; attempt++) {
