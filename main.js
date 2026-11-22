@@ -1,5 +1,6 @@
 const siteBaseUrl = "https://hongguoduanju.com";
 const appBaseUrl = "https://api5-normal-sinfonlineb.fqnovel.com";
+const rankBaseUrl = "https://api5-normal-sinfonlinec.fqnovel.com";
 const playbackBaseUrl = "https://api5-normal-sinfonlinea.fqnovel.com";
 const appVersionCode = "74532";
 const appVersionName = "7.4.5.32";
@@ -60,6 +61,7 @@ const paths = {
   tagLanding: "/reading/bookapi/new_category/landing/v/",
   bookmallTab: "/reading/bookapi/bookmall/tab/v1/",
   bookmallCellChange: "/reading/bookapi/bookmall/cell/change/v1/",
+  rankCell: "/reading/bookapi/bookmall/cell/change/v:version/",
   audioDetail: "/reading/bookapi/detail/v1/",
   audioTone: "/reading/bookapi/audio/toneinfo/",
   audioDirectory: "/reading/bookapi/directory/all_items/v1/",
@@ -88,6 +90,23 @@ const rankingBoards = {
   "hongguo-real": { path: "hot-real-drama", upstreamKey: "real" },
   "hongguo-comic": { path: "hot-comic-drama", upstreamKey: "comic" },
   "hongguo-ai": { path: "hot-ai-drama", upstreamKey: "ai" },
+};
+
+const nativeRankGenres = {
+  all: { selected: "all", label: "全部" },
+  human: { selected: "human", label: "真人剧" },
+  comic: { selected: "comic_series_rank", label: "漫剧" },
+  ai: { selected: "ai_playlet", label: "AI剧" },
+};
+const nativeRankSubs = {
+  subscribe: { label: "预约", ids: { all: "ranklist_subscribe" } },
+  recommend: { label: "推荐", ids: { all: "ranklist_hot_sc", human: "human_hot_sc", comic: "comic_series_hot_rank", ai: "ai_playlet_hot_sc" } },
+  hot: { label: "热播", ids: { all: "ranklist_hot_play_sc", human: "human_hot_play", comic: "comic_series_hot_play", ai: "ai_playlet_hot_play" } },
+  zhenguo: { label: "臻果", ids: { all: "ranklist_prestige" } },
+  new: { label: "新剧", ids: { all: "ranklist_new_rank_sc", human: "human_new_rank", comic: "comic_series_new_rank", ai: "ai_playlet_new_rank" } },
+  must_watch: { label: "必看", ids: { all: "ranklist_must_watch", human: "human_must_watch", ai: "ai_playlet_must_watch" } },
+  followed: { label: "收藏", ids: { all: "ranklist_followed", human: "human_followed", ai: "ai_playlet_followed" } },
+  hot_search: { label: "热搜", ids: { all: "ranklist_hot_search_sc", human: "human_hot_search", comic: "comic_series_hot_search", ai: "ai_playlet_hot_search" } },
 };
 
 function failure(text, flags) {
@@ -1506,7 +1525,8 @@ function appRequest(method, path, extra, payload, options) {
     if (remainingMs(deadline) <= 0) {
       throw lastError || timeoutError();
     }
-    const address = (playback ? playbackBaseUrl : appBaseUrl) + path;
+    const baseUrl = path === paths.rankCell ? rankBaseUrl : playback ? playbackBaseUrl : appBaseUrl;
+    const address = baseUrl + path;
     const nonce = comment ? host.randomBytes(11) : null;
     let ticket;
     try {
@@ -1533,7 +1553,7 @@ function appRequest(method, path, extra, payload, options) {
       headers["Comment-Source"] = "601";
       headers["Server-Channel"] = "1000";
       Object.assign(headers, signComment(rawQuery, query.aid, now, nonce));
-    } else if (signed) {
+    } else if (signed && path !== paths.rankCell) {
       Object.assign(headers, signPlayer(rawQuery, body, query.aid, query.device_id, now, host.randomBytes(11)));
     }
     if (body !== null) {
@@ -4078,7 +4098,72 @@ function parseRankingDocument(body, board, page, loader) {
   return result;
 }
 
+function nativeRankingPage(boardId, page) {
+  const match = /^hongguo-native-([a-z_]+)-([a-z_]+)$/.exec(boardId);
+  if (!match) {
+    return null;
+  }
+  const genreKey = match[1];
+  const subKey = match[2];
+  const genre = nativeRankGenres[genreKey];
+  const sub = nativeRankSubs[subKey];
+  const subId = sub && sub.ids[genreKey];
+  if (!genre || !subId) {
+    throw new Error("该红果剧种暂不支持此榜单");
+  }
+  page = Math.max(1, Math.min(500, Math.trunc(Number(page) || 1)));
+  const offset = (page - 1) * 20;
+  const cacheKey = "nativeRankSeen:" + boardId;
+  let seen = [];
+  if (page > 1) {
+    try {
+      const raw = host.cacheGet(cacheKey);
+      const parsed = raw === null ? [] : JSON.parse(raw);
+      if (Array.isArray(parsed)) seen = parsed.filter(numericId).slice(-500);
+    } catch (error) {}
+  } else {
+    host.cacheSet(cacheKey, "[]", 0);
+  }
+  const result = appRequest("GET", paths.rankCell, {
+    background_selected_items: "",
+    celebrity_user_id: "",
+    cell_id: "7470092475068071998",
+    client_req_type: "2",
+    client_template: "2",
+    filter_ids: seen.join(","),
+    offset: String(offset),
+    panel_selected_items: "",
+    rank_version: String(Math.trunc(Date.now() / 1000)),
+    screen_width_px: "1080",
+    selected_items: genre.selected,
+    sub_selected_items: subId,
+    tab_type: "26",
+    unlimited_selector_change_type: "1",
+    channel: "ry_hongguo_offlinestore_04",
+  }, null, { deadline: Date.now() + rankingTimeoutMs });
+  const data = nested(result, "data");
+  const cells = anyList(nested(data, "cell_view").cell_data);
+  const items = [];
+  const pageSeen = new Set();
+  let rank = offset;
+  for (const cell of cells) {
+    for (const video of anyList(isRecord(cell) ? cell.video_data : null)) {
+      const drama = dramaFromRow({ video_data: video }, genre.label);
+      if (drama === null || !numericId(String(drama.sourceId || "")) || pageSeen.has(drama.sourceId)) continue;
+      pageSeen.add(drama.sourceId);
+      rank++;
+      items.push({ rank, drama, metric: firstNonEmpty(drama.heat, drama.views, "") });
+    }
+  }
+  const allSeen = Array.from(new Set(seen.concat(items.map((item) => String(item.drama.sourceId))))).slice(-500);
+  host.cacheSet(cacheKey, JSON.stringify(allSeen), 30 * minuteMs);
+  const hasMore = data.has_more === true || mapString(data, "has_more") === "true";
+  return { items, hasMore, totalPages: hasMore ? 0 : page, updatedText: "" };
+}
+
 function rankingPage(boardId, page) {
+  const native = nativeRankingPage(boardId, page);
+  if (native !== null) return native;
   const board = rankingBoards[boardId];
   if (!board) {
     throw new Error("未知的红果榜单");

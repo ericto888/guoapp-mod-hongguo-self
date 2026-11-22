@@ -1,8 +1,8 @@
 {
   "id": "hongguo-self",
   "name": "红果",
-  "version": "1.0.11",
-  "description": "短剧 · 漫剧 · AI 剧 · 听书 · 多维分类筛选",
+  "version": "1.0.12",
+  "description": "短剧 · 漫剧 · AI 剧 · 听书 · 多维筛选 · 原生榜单",
   "runtime": "js",
   "api": 1,
   "adult": false,
@@ -12,7 +12,8 @@
     "api5-normal-sinfonlineb.fqnovel.com",
     "api5-normal-sinfonlinea.fqnovel.com",
     "log.snssdk.com",
-    "vas-lf-x.snssdk.com"
+    "vas-lf-x.snssdk.com",
+    "api5-normal-sinfonlinec.fqnovel.com"
   ],
   "capabilities": [
     "search",
@@ -35,24 +36,124 @@
   "continuousFeed": true,
   "rankings": [
     {
-      "id": "hongguo-hot",
-      "name": "总热播榜",
-      "description": "红果观看、互动等综合热度；每日更新。"
+      "id": "hongguo-native-all-subscribe",
+      "name": "全部 · 预约",
+      "description": "红果 App 原生全部预约榜，支持真实分页。"
     },
     {
-      "id": "hongguo-real",
-      "name": "真人剧榜",
-      "description": "红果真人剧热播榜；每日更新。"
+      "id": "hongguo-native-all-recommend",
+      "name": "全部 · 推荐",
+      "description": "红果 App 原生全部推荐榜，支持真实分页。"
     },
     {
-      "id": "hongguo-comic",
-      "name": "漫剧榜",
-      "description": "红果漫剧热播榜；每日更新。"
+      "id": "hongguo-native-human-recommend",
+      "name": "真人剧 · 推荐",
+      "description": "红果 App 原生真人剧推荐榜，支持真实分页。"
     },
     {
-      "id": "hongguo-ai",
-      "name": "AI剧榜",
-      "description": "红果 AI 剧热播榜；每日更新。"
+      "id": "hongguo-native-comic-recommend",
+      "name": "漫剧 · 推荐",
+      "description": "红果 App 原生漫剧推荐榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-ai-recommend",
+      "name": "AI剧 · 推荐",
+      "description": "红果 App 原生AI剧推荐榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-all-hot",
+      "name": "全部 · 热播",
+      "description": "红果 App 原生全部热播榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-human-hot",
+      "name": "真人剧 · 热播",
+      "description": "红果 App 原生真人剧热播榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-comic-hot",
+      "name": "漫剧 · 热播",
+      "description": "红果 App 原生漫剧热播榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-ai-hot",
+      "name": "AI剧 · 热播",
+      "description": "红果 App 原生AI剧热播榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-all-zhenguo",
+      "name": "全部 · 臻果",
+      "description": "红果 App 原生全部臻果榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-all-new",
+      "name": "全部 · 新剧",
+      "description": "红果 App 原生全部新剧榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-human-new",
+      "name": "真人剧 · 新剧",
+      "description": "红果 App 原生真人剧新剧榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-comic-new",
+      "name": "漫剧 · 新剧",
+      "description": "红果 App 原生漫剧新剧榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-ai-new",
+      "name": "AI剧 · 新剧",
+      "description": "红果 App 原生AI剧新剧榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-all-must_watch",
+      "name": "全部 · 必看",
+      "description": "红果 App 原生全部必看榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-human-must_watch",
+      "name": "真人剧 · 必看",
+      "description": "红果 App 原生真人剧必看榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-ai-must_watch",
+      "name": "AI剧 · 必看",
+      "description": "红果 App 原生AI剧必看榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-all-followed",
+      "name": "全部 · 收藏",
+      "description": "红果 App 原生全部收藏榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-human-followed",
+      "name": "真人剧 · 收藏",
+      "description": "红果 App 原生真人剧收藏榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-ai-followed",
+      "name": "AI剧 · 收藏",
+      "description": "红果 App 原生AI剧收藏榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-all-hot_search",
+      "name": "全部 · 热搜",
+      "description": "红果 App 原生全部热搜榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-human-hot_search",
+      "name": "真人剧 · 热搜",
+      "description": "红果 App 原生真人剧热搜榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-comic-hot_search",
+      "name": "漫剧 · 热搜",
+      "description": "红果 App 原生漫剧热搜榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-native-ai-hot_search",
+      "name": "AI剧 · 热搜",
+      "description": "红果 App 原生AI剧热搜榜，支持真实分页。"
     }
   ]
 }
