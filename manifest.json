@@ -1,7 +1,7 @@
 {
   "id": "hongguo-self",
   "name": "红果",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "短剧 · 漫剧 · AI 剧 · 听书 · 多维筛选 · 原生榜单",
   "runtime": "js",
   "api": 1,
@@ -42,12 +42,12 @@
     },
     {
       "id": "hongguo-native-all-hot",
-      "name": "全部 · 热播",
+      "name": "热播榜",
       "description": "红果 App 原生全部热播榜，支持真实分页。"
     },
     {
       "id": "hongguo-native-all-zhenguo",
-      "name": "全部 · 臻果",
+      "name": "臻果榜",
       "description": "红果 App 原生全部臻果榜，支持真实分页。"
     },
     {
@@ -57,7 +57,7 @@
     },
     {
       "id": "hongguo-native-all-must_watch",
-      "name": "全部 · 必看",
+      "name": "必看榜",
       "description": "红果 App 原生全部必看榜，支持真实分页。"
     },
     {
@@ -69,6 +69,26 @@
       "id": "hongguo-native-all-hot_search",
       "name": "热搜榜",
       "description": "红果 App 原生全部热搜榜，支持真实分页。"
+    },
+    {
+      "id": "hongguo-hot",
+      "name": "总热播榜",
+      "description": "红果观看、互动等综合热度；每日更新。"
+    },
+    {
+      "id": "hongguo-real",
+      "name": "真人剧榜",
+      "description": "红果真人剧热播榜；每日更新。"
+    },
+    {
+      "id": "hongguo-comic",
+      "name": "漫剧榜",
+      "description": "红果漫剧热播榜；每日更新。"
+    },
+    {
+      "id": "hongguo-ai",
+      "name": "AI剧榜",
+      "description": "红果 AI 剧热播榜；每日更新。"
     }
   ]
 }
