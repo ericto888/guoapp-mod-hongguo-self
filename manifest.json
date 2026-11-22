@@ -1,8 +1,8 @@
 {
   "id": "hongguo-self",
   "name": "红果",
-  "version": "1.0.10",
-  "description": "短剧 · 漫剧 · AI 剧 · 听书",
+  "version": "1.0.11",
+  "description": "短剧 · 漫剧 · AI 剧 · 听书 · 多维分类筛选",
   "runtime": "js",
   "api": 1,
   "adult": false,
@@ -24,7 +24,8 @@
     "seasons",
     "cover",
     "metadata",
-    "catalogState"
+    "catalogState",
+    "categoryFilters"
   ],
   "aliases": [
     "hongguoduanju.com",
@@ -33,9 +34,25 @@
   "baseUrl": "https://hongguoduanju.com",
   "continuousFeed": true,
   "rankings": [
-    { "id": "hongguo-hot", "name": "总热播榜", "description": "红果观看、互动等综合热度；每日更新。" },
-    { "id": "hongguo-real", "name": "真人剧榜", "description": "红果真人剧热播榜；每日更新。" },
-    { "id": "hongguo-comic", "name": "漫剧榜", "description": "红果漫剧热播榜；每日更新。" },
-    { "id": "hongguo-ai", "name": "AI剧榜", "description": "红果 AI 剧热播榜；每日更新。" }
+    {
+      "id": "hongguo-hot",
+      "name": "总热播榜",
+      "description": "红果观看、互动等综合热度；每日更新。"
+    },
+    {
+      "id": "hongguo-real",
+      "name": "真人剧榜",
+      "description": "红果真人剧热播榜；每日更新。"
+    },
+    {
+      "id": "hongguo-comic",
+      "name": "漫剧榜",
+      "description": "红果漫剧热播榜；每日更新。"
+    },
+    {
+      "id": "hongguo-ai",
+      "name": "AI剧榜",
+      "description": "红果 AI 剧热播榜；每日更新。"
+    }
   ]
 }

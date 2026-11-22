@@ -1830,6 +1830,112 @@ function categories(force) {
   return base.concat(tags);
 }
 
+const categoryPanelCacheMs = 10 * minuteMs;
+
+function categoryPanel(genre) {
+  genre = String(genre || "").trim();
+  if (genre !== "" && !genres.some((item) => item.key === genre)) throw new Error("未知的红果剧种");
+  const cacheKey = "categoryPanel:" + (genre || "all");
+  const cached = cacheRead(cacheKey);
+  if (cached !== null && isRecord(cached) && Array.isArray(cached.rows)) return cached;
+  const selection = genre === "" ? {} : { genre: [genre] };
+  const scene = genre !== "" && genre !== "short_play" ? genre : "default";
+  const payload = {
+    req_scene: scene, offset: 0, limit: 12, req_type: "only_panel",
+    need_selector_panel: true, client_req_type: 3, session_id: "", filter_ids: "",
+    select_items: selection,
+  };
+  const result = appRequest("POST", paths.landpage, null, payload);
+  const data = nested(result, "data");
+  const sourceRows = anyList(data.selector_rows);
+  if (sourceRows.length === 0) throw new Error("红果未返回分类筛选面板");
+  const rows = [];
+  const seenTypes = new Set();
+  for (const sourceRow of sourceRows) {
+    const type = mapString(sourceRow, "type");
+    if (type === "" || seenTypes.has(type)) continue;
+    seenTypes.add(type);
+    const items = [];
+    const seenIds = new Set();
+    for (const sourceItem of anyList(sourceRow.items)) {
+      const id = mapString(sourceItem, "selector_item_id");
+      const name = mapString(sourceItem, "show_name");
+      if (id === "" || name === "" || seenIds.has(id)) continue;
+      seenIds.add(id);
+      items.push({ id, name });
+    }
+    if (items.length > 0) {
+      rows.push({
+        type, name: mapString(sourceRow, "row_name") || type,
+        selectionType: parseInteger(mapString(sourceRow, "selection_type")) || 0, items,
+      });
+    }
+  }
+  if (rows.length === 0) throw new Error("红果分类筛选项为空");
+  const panel = { genre, rows };
+  cacheWrite(cacheKey, panel, categoryPanelCacheMs);
+  return panel;
+}
+
+function categorySelection(panel, filterIds) {
+  if (!Array.isArray(filterIds) || filterIds.length > 100) throw new Error("红果筛选条件无效");
+  const selection = {}, single = {}, itemTypes = {};
+  for (const row of panel.rows) {
+    selection[row.type] = [];
+    single[row.type] = row.selectionType === 2;
+    for (const item of row.items) {
+      if (Object.prototype.hasOwnProperty.call(itemTypes, item.id) && itemTypes[item.id] !== row.type) {
+        throw new Error("红果筛选项 ID 冲突");
+      }
+      itemTypes[item.id] = row.type;
+    }
+  }
+  const seen = new Set();
+  for (const raw of filterIds) {
+    const id = String(raw || "").trim();
+    if (id === "" || seen.has(id)) continue;
+    seen.add(id);
+    const type = itemTypes[id];
+    if (!type) throw new Error("未知的红果筛选项：" + truncate(id, 40));
+    if (single[type] && selection[type].length > 0) throw new Error("红果筛选维度“" + type + "”只能选择一项");
+    selection[type].push(id);
+  }
+  return selection;
+}
+
+function categoryFilterPage(genre, filterIds, offset, sessionId, seenIds) {
+  if (!Array.isArray(filterIds)) throw new Error("红果筛选条件无效");
+  offset = Number.isInteger(offset) && offset >= 0 && offset <= 1000000 ? offset : 0;
+  sessionId = typeof sessionId === "string" ? sessionId : "";
+  if (sessionId.length > 4096 || /[\r\n\x00]/.test(sessionId)) throw new Error("红果分类分页会话无效");
+  const seen = Array.isArray(seenIds) ? seenIds.map((value) => String(value).trim()).filter((value) => numericId(value)) : [];
+  genre = String(genre || "").trim();
+  const panel = categoryPanel(genre);
+  const selection = categorySelection(panel, filterIds);
+  const scene = genre !== "" && genre !== "short_play" ? genre : "default";
+  const payload = {
+    req_scene: scene, offset, limit: 12, req_type: "only_content", need_selector_panel: false,
+    client_req_type: 3, session_id: sessionId, filter_ids: seen.join(","), select_items: selection,
+  };
+  const result = appRequest("POST", paths.landpage, null, payload);
+  const data = nested(result, "data");
+  const sourceRows = data.video_data;
+  if (!Array.isArray(sourceRows)) throw new Error("红果筛选结果数据格式异常");
+  const categoryName = genre === "" ? "" : genre === "comic_series" ? "漫剧" : genre === "ai_series" ? "AI剧" : "真人剧";
+  const items = sourceRows.map((row) => dramaFromRow(row, categoryName)).filter((drama) => drama !== null);
+  if (sourceRows.length > 0 && items.length === 0) throw new Error("红果筛选结果中没有可识别的剧集");
+  const nextOffset = parseInteger(mapString(data, "next_offset"));
+  const hasMore = data.has_more === true;
+  const nextSession = mapString(data, "session_id") || sessionId;
+  if (hasMore && (Number.isNaN(nextOffset) || nextOffset <= offset || nextSession === "")) throw new Error("红果筛选分页游标无效");
+  return {
+    items, hasMore: hasMore && items.length > 0,
+    nextOffset: Number.isNaN(nextOffset) ? offset + sourceRows.length : nextOffset,
+    sessionId: nextSession,
+  };
+}
+
+
 function catalogHasMore(state) {
   return genres.some((genre) => !state || !(state.feeds[genre.key] && state.feeds[genre.key].exhausted));
 }
@@ -4354,6 +4460,8 @@ module.exports = {
   categories,
   validCategory,
   catalogPage,
+  categoryPanel,
+  categoryFilterPage,
   search,
   detail,
   resolveMedia,
